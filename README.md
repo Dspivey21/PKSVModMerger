@@ -6,8 +6,8 @@
 
 A small Windows tool that lets multiple Pokémon Scarlet/Violet mods
 coexist. It merges their `data.trpfd` files into one **and** resolves
-conflicts when two mods modify the same game asset, so all your mods
-load correctly together instead of clobbering each other.
+conflicts when two or more mods modify the same game asset, so all your mods
+load correctly together instead of conflicting with each other.
 
 ## The problem
 
