@@ -1,5 +1,9 @@
 # Pokémon SV Mod Merger
 
+<p align="center">
+  <img src="docs/screenshot.png" width="600" alt="Pokémon SV Mod Merger UI">
+</p>
+
 A small Windows tool that merges multiple Pokémon Scarlet/Violet mod
 `data.trpfd` files into one, so mods that each ship their own TRPFD can
 coexist without clobbering each other.
