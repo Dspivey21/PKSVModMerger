@@ -1,0 +1,33 @@
+// FlatBuffers schema for Pokémon Scarlet/Violet's data.trpfd file.
+//
+// data.trpfd is a virtual file index used by the game's romfs/arc subsystem.
+// Each entry in FileHashes is the FNV-1a-64 of a romfs-relative path that the
+// game's TRPFD service can serve directly from the indexed packs. Hashes that
+// appear in UnusedHashes are skipped by the indexed lookup so the platform's
+// LayeredFS layer can serve a loose file from disk instead — this is how
+// mods inject replacement assets without rebuilding the packs.
+//
+// Field order below is the on-disk field id order; do not reorder.
+
+namespace PKSVModMerger.Schema;
+
+table FileInfo {
+  pack_index:uint64;
+  unused_table:uint32;
+}
+
+table PackInfo {
+  file_size:uint64;
+  file_count:uint64;
+}
+
+table FileDescriptor {
+  file_hashes:[uint64];
+  pack_names:[string];
+  file_info:[FileInfo];
+  pack_info:[PackInfo];
+  unused_hashes:[uint64];
+  unused_file_info:[FileInfo];
+}
+
+root_type FileDescriptor;

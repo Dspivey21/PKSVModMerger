@@ -1,0 +1,27 @@
+# Build output
+bin/
+obj/
+
+# Build-time tool (not redistributed; users only need it if regenerating the schema)
+tools/
+
+# Visual Studio / Rider / VS Code artifacts
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.lnk
+
+# OS junk
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Test outputs
+smoke-test-*.trpfd
+
+# Claude Code internal state
+.claude/
