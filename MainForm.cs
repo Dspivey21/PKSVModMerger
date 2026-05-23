@@ -179,7 +179,7 @@ internal sealed class MainForm : Form
         }
     }
 
-    private readonly ListBox _addList = new() { SelectionMode = SelectionMode.MultiExtended, IntegralHeight = false, BorderStyle = BorderStyle.None };
+    private readonly ListBox _addList = new() { SelectionMode = SelectionMode.MultiExtended, IntegralHeight = false, BorderStyle = BorderStyle.None, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 28 };
     private readonly RoundedButton _addAdd = new() { Text = "Add..." };
     private readonly RoundedButton _addRemove = new() { Text = "Remove" };
     private readonly RoundedButton _addUp = new() { Text = "Up" };
@@ -234,7 +234,7 @@ internal sealed class MainForm : Form
 
         var modsHint = new Label
         {
-            Text = "Welcome to Pokémon SV Mod Merger!\n\n- Start by selecting your base mod by clicking Add.\n- Use your largest mod as a base.\n- The mod at the top of the list will be used as the base; the rest get merged into it.",
+            Text = "Welcome to Pokémon SV Mod Merger!\n\n- Start by selecting your base mod by clicking Add.\n- Use your largest mod as a base.\n- The mod at the top of the list will be used as the base; the rest get merged into it.\n- The last mod in the list takes precedence over the preceding mods on file conflicts.",
             AutoSize = true,
             Dock = DockStyle.Top,
             Padding = new Padding(4, 4, 4, 12),
@@ -279,7 +279,7 @@ internal sealed class MainForm : Form
 
         var outputHint = new Label
         {
-            Text = "We'll create a folder in your mods folder that combines all of your mods' data.trpfd files into one data.trpfd file. You still need to have already installed your mods properly inside your mods folder before hitting Merge. A backup will be created of each merged file that you can restore by clicking Restore old files.",
+            Text = "We'll combine all your mods' data.trpfd files into one, placed in a new folder inside your mods folder. Make sure your mods are already installed before clicking Merge. If two mods change the same file, the one lower in the list wins — the other is renamed to .bak. Click Restore old files to undo every rename.",
             AutoSize = true,
             MaximumSize = new Size(940, 0),
             Dock = DockStyle.Bottom,
@@ -350,6 +350,20 @@ internal sealed class MainForm : Form
 
     private void WireEvents()
     {
+        _addList.DrawItem += (sender, e) =>
+        {
+            if (e.Index < 0) return;
+            e.DrawBackground();
+            var item = _addList.Items[e.Index];
+            var text = $"{e.Index + 1}. {item}";
+            var selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            using var brush = new SolidBrush(selected ? SystemColors.HighlightText : _addList.ForeColor);
+            e.Graphics.DrawString(text, _addList.Font, brush, e.Bounds);
+            e.DrawFocusRectangle();
+        };
+        // Reordering doesn't fire DrawItem on the other rows by itself; force a redraw.
+        _addList.SelectedIndexChanged += (_, _) => _addList.Invalidate();
+
         _addAdd.Click += (_, _) =>
         {
             using var dlg = new FolderBrowserDialog
@@ -422,6 +436,7 @@ internal sealed class MainForm : Form
         _addList.Items.RemoveAt(i);
         _addList.Items.Insert(j, item);
         _addList.SelectedIndex = j;
+        _addList.Invalidate(); // refresh numbering across all rows
     }
 
     private async Task DoMerge()
@@ -465,12 +480,17 @@ internal sealed class MainForm : Form
         _logBox.Clear();
         var startedAt = DateTime.Now;
 
+        // Snapshot the listbox so background work doesn't touch UI-thread state directly.
+        var modSnapshot = new List<ModEntry>();
+        foreach (var item in _addList.Items) modSnapshot.Add((ModEntry)item!);
+
         try
         {
             var result = await Task.Run(() => Merger.Run(basePath, addPaths, outPath, AppendLog));
             var elapsed = DateTime.Now - startedAt;
             AppendLog($"[done ] {elapsed.TotalSeconds:F1}s — active={result.FinalActive} unused={result.FinalUnused}");
             BackupSourceTrpfds(outPath);
+            await Task.Run(() => BackupLooseFileConflicts(modSnapshot, outPath));
         }
         catch (Exception ex)
         {
@@ -533,7 +553,73 @@ internal sealed class MainForm : Form
         if (updates.Count > 0) PersistMods();
     }
 
-    private void DoRestore()
+    // Walk each mod in reverse list order — the last mod wins on conflicts. For every
+    // file inside a mod's romfs/ folder, if a higher-priority mod (later in list) already
+    // claimed that relative path, rename this mod's file to .bak. Skip data.trpfd (handled
+    // separately by BackupSourceTrpfds) and any existing .bak files.
+    private void BackupLooseFileConflicts(List<ModEntry> mods, string outPath)
+    {
+        AppendLog("[conflict] scanning romfs/ folders for path collisions...");
+
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int totalRenamed = 0, totalDropped = 0;
+
+        for (int i = mods.Count - 1; i >= 0; i--)
+        {
+            var me = mods[i];
+            var romfsPath = Path.Combine(me.FolderPath, "romfs");
+            if (!Directory.Exists(romfsPath)) continue;
+
+            int modRenamed = 0, modDropped = 0;
+            foreach (var fullPath in Directory.EnumerateFiles(romfsPath, "*", SearchOption.AllDirectories))
+            {
+                var relPath = Path.GetRelativePath(me.FolderPath, fullPath).Replace('\\', '/');
+
+                // Skip data.trpfd (handled by BackupSourceTrpfds) and any already-renamed .bak.
+                if (relPath.Equals("romfs/arc/data.trpfd", StringComparison.OrdinalIgnoreCase)) continue;
+                if (relPath.EndsWith(".bak", StringComparison.OrdinalIgnoreCase)) continue;
+
+                if (claimed.Contains(relPath))
+                {
+                    var bakPath = fullPath + ".bak";
+                    try
+                    {
+                        if (File.Exists(bakPath))
+                        {
+                            File.Delete(fullPath);
+                            modDropped++;
+                        }
+                        else
+                        {
+                            File.Move(fullPath, bakPath);
+                            modRenamed++;
+                        }
+                        AppendLog($"[conflict] {me} — {relPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        AppendLog($"[conflict err] {me} — {relPath}: {ex.Message}");
+                    }
+                }
+                else
+                {
+                    claimed.Add(relPath);
+                }
+            }
+
+            if (modRenamed > 0 || modDropped > 0)
+                AppendLog($"[conflict] {me} — renamed={modRenamed}, dropped={modDropped}");
+
+            totalRenamed += modRenamed;
+            totalDropped += modDropped;
+        }
+
+        AppendLog(totalRenamed + totalDropped > 0
+            ? $"[conflict] total: {totalRenamed} renamed to .bak, {totalDropped} dropped (older backup preserved)"
+            : "[conflict] no loose-file conflicts found");
+    }
+
+    private async void DoRestore()
     {
         if (_addList.Items.Count == 0)
         {
@@ -542,38 +628,20 @@ internal sealed class MainForm : Form
         }
 
         _logBox.Clear();
-        AppendLog("[restore] renaming data.trpfd.bak → data.trpfd for each listed mod...");
+        AppendLog("[restore] scanning each mod folder for .bak files...");
 
-        var updates = new List<(int index, string newPath)>();
-        int restored = 0, skipped = 0;
-        for (int i = 0; i < _addList.Items.Count; i++)
+        var modSnapshot = new List<ModEntry>();
+        foreach (var item in _addList.Items) modSnapshot.Add((ModEntry)item!);
+
+        _restoreBtn.Enabled = false;
+        List<(int index, string newTrpfdPath)> updates;
+        try
         {
-            var me = (ModEntry)_addList.Items[i]!;
-            if (!me.TrpfdPath.EndsWith(".trpfd.bak", StringComparison.OrdinalIgnoreCase))
-            {
-                AppendLog($"[skip ] {me} — no backup tracked");
-                skipped++;
-                continue;
-            }
-
-            var origPath = me.TrpfdPath.Substring(0, me.TrpfdPath.Length - 4);
-            try
-            {
-                if (File.Exists(origPath))
-                {
-                    AppendLog($"[skip ] {me} — data.trpfd already present, leaving .bak alone");
-                    skipped++;
-                    continue;
-                }
-                File.Move(me.TrpfdPath, origPath);
-                AppendLog($"[restore] {me} — data.trpfd.bak → data.trpfd");
-                updates.Add((i, origPath));
-                restored++;
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"[restore err] {me}: {ex.Message}");
-            }
+            updates = await Task.Run(() => RestoreBaks(modSnapshot));
+        }
+        finally
+        {
+            _restoreBtn.Enabled = true;
         }
 
         foreach (var (i, newPath) in updates)
@@ -583,7 +651,59 @@ internal sealed class MainForm : Form
         }
         if (updates.Count > 0) PersistMods();
 
-        AppendLog($"[done ] restored={restored}, skipped={skipped}. Disable or delete the AAA_Master folder in your mod manager if you want to fully revert.");
+        AppendLog("[done ] restore complete. Disable or delete the AAA_Master folder in your mod manager if you want to fully revert.");
+    }
+
+    private List<(int index, string newTrpfdPath)> RestoreBaks(List<ModEntry> mods)
+    {
+        var entryUpdates = new List<(int index, string newTrpfdPath)>();
+        int totalRestored = 0, totalSkipped = 0;
+
+        for (int i = 0; i < mods.Count; i++)
+        {
+            var me = mods[i];
+            if (!Directory.Exists(me.FolderPath))
+            {
+                AppendLog($"[skip ] {me} — folder missing");
+                continue;
+            }
+
+            int restored = 0, skipped = 0;
+            var bakFiles = Directory.EnumerateFiles(me.FolderPath, "*.bak", SearchOption.AllDirectories).ToList();
+            foreach (var bakPath in bakFiles)
+            {
+                var origPath = bakPath.Substring(0, bakPath.Length - 4);
+                try
+                {
+                    if (File.Exists(origPath))
+                    {
+                        skipped++;
+                        continue;
+                    }
+                    File.Move(bakPath, origPath);
+                    restored++;
+                }
+                catch (Exception ex)
+                {
+                    AppendLog($"[restore err] {Path.GetRelativePath(me.FolderPath, bakPath)}: {ex.Message}");
+                }
+            }
+
+            // If this mod's tracked TrpfdPath was a .bak that we just restored, update it.
+            if (me.TrpfdPath.EndsWith(".trpfd.bak", StringComparison.OrdinalIgnoreCase))
+            {
+                var origTrpfd = me.TrpfdPath.Substring(0, me.TrpfdPath.Length - 4);
+                if (File.Exists(origTrpfd))
+                    entryUpdates.Add((i, origTrpfd));
+            }
+
+            AppendLog($"[restore] {me} — restored={restored}, skipped={skipped}");
+            totalRestored += restored;
+            totalSkipped += skipped;
+        }
+
+        AppendLog($"[restore] total: restored={totalRestored}, skipped={totalSkipped}");
+        return entryUpdates;
     }
 
     protected override void OnShown(EventArgs e)

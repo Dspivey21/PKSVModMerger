@@ -27,18 +27,31 @@ manifest of files each mod overrides), and writes a single merged
 renames each source mod's `data.trpfd` to `data.trpfd.bak` so the
 emulator only sees one TRPFD and the right one loads.
 
-A **Restore old files** button reverses the rename if you want to revert.
+**Loose-file conflict resolution** — beyond merging TRPFDs, the tool
+also scans every mod's `romfs/` folder during the merge. If two mods
+ship a file at the same relative path (e.g. both retexture the same
+outfit), the one lower in your list wins; the higher-up mod's copy is
+renamed to `.bak`. This means your list order genuinely determines who
+wins on conflicts, instead of leaving it to the emulator's alphabetical
+mod-folder load order.
+
+A **Restore old files** button reverses every `.bak` rename in one
+click — both the TRPFD backups and the loose-file backups.
 
 ## Usage (GUI)
 
 1. Download the latest `PKSVModMerger.exe` from the [Releases page](../../releases).
 2. Double-click to launch.
 3. Click **Add...** for each mod folder you want to include. The mod at
-   the top of the list is treated as the base; the rest are merged into it.
-   The largest mod is usually the best base.
+   the top of the list is treated as the base; the rest are merged into
+   it. **The last mod in the list wins on file conflicts** — put your
+   highest-priority mods at the bottom. The largest mod is usually the
+   best base (position 1).
 4. Click **Browse...** for the Output Mods Folder — pick your mods
    folder (the one that holds each mod's subfolder).
-5. Click **Merge**.
+5. Click **Merge**. Watch the log for `[conflict]` lines if any loose
+   files overlap between mods — the lower-priority copies get renamed
+   to `.bak` automatically.
 6. Enable the new `AAA_Master` folder in your mod manager, and disable
    the original mods' TRPFDs (or leave them — their `.trpfd` files are
    already renamed to `.bak` so they won't conflict).
@@ -95,6 +108,14 @@ A modded TRPFD moves certain hashes from `FileHashes` into `UnusedHashes`,
 which tells the game to skip the indexed pack and look for the file on
 disk. Merging is just unioning all the `UnusedHashes` sets together — for
 each unused hash any input declares, the merged TRPFD also marks it unused.
+
+For loose-file conflicts (two mods both shipping a real file at the same
+path), the tool walks the mod list in reverse and assigns each relative
+path to the latest mod that has it. Earlier mods' copies of the same
+path are renamed to `.bak`. The relevant scope is each mod's `romfs/`
+folder — files outside `romfs/` (READMEs, mod metadata) are ignored,
+and `romfs/arc/data.trpfd` is excluded because it's handled separately
+by the TRPFD merge itself.
 
 ## Credits
 
