@@ -6,7 +6,7 @@ coexist without clobbering each other.
 
 ## The problem
 
-Yuzu's LayeredFS only loads one `data.trpfd` per game — whichever mod folder
+Emulators only load one `data.trpfd` per game — whichever mod folder
 wins the load order. If you install three mods that each ship a modified
 TRPFD (e.g. a texture pack, a clothing pack, and a gameplay overhaul), two
 of them silently get ignored and most of their files don't load.
@@ -24,8 +24,8 @@ Existing tools didn't solve this for SV:
 Reads each mod's `data.trpfd`, unions all the "unused" hash sets (the
 manifest of files each mod overrides), and writes a single merged
 `data.trpfd` to a new mod folder (`AAA_Master` by default). It also
-renames each source mod's `data.trpfd` to `data.trpfd.bak` so Yuzu only
-sees one TRPFD and the right one loads.
+renames each source mod's `data.trpfd` to `data.trpfd.bak` so the
+emulator only sees one TRPFD and the right one loads.
 
 A **Restore old files** button reverses the rename if you want to revert.
 
@@ -36,15 +36,15 @@ A **Restore old files** button reverses the rename if you want to revert.
 3. Click **Add...** for each mod folder you want to include. The mod at
    the top of the list is treated as the base; the rest are merged into it.
    The largest mod is usually the best base.
-4. Click **Browse...** for the Output Mods Folder — pick your Yuzu mods
-   folder (typically `%APPDATA%\yuzu\load\<title id>\`).
+4. Click **Browse...** for the Output Mods Folder — pick your mods
+   folder (the one that holds each mod's subfolder).
 5. Click **Merge**.
-6. Enable the new `AAA_Master` folder in Yuzu's add-ons list, and disable
+6. Enable the new `AAA_Master` folder in your mod manager, and disable
    the original mods' TRPFDs (or leave them — their `.trpfd` files are
    already renamed to `.bak` so they won't conflict).
 
 To revert everything: click **Restore old files**. Then either disable
-`AAA_Master` in Yuzu's add-ons or delete the folder.
+`AAA_Master` in your mod manager or delete the folder.
 
 ## Usage (CLI)
 
@@ -60,7 +60,7 @@ set into it. The result is written to `<output.trpfd>` and prints a summary.
 Requires .NET 8 SDK on Windows.
 
 ```
-git clone https://github.com/<your-username>/PKSVModMerger.git
+git clone https://github.com/Dspivey21/PKSVModMerger.git
 cd PKSVModMerger
 dotnet build -c Release
 ```
@@ -87,13 +87,14 @@ You'll need to download `flatc.exe` yourself from the
 
 - `FileHashes` — FNV-1a-64 of every romfs-relative path the game serves
   from indexed packs
-- `UnusedHashes` — hashes flagged for LayeredFS fallback (i.e. modded files)
+- `UnusedHashes` — hashes the game treats as "skip my pack, look on disk
+  instead" (i.e. modded files)
 - Parallel `FileInfo` arrays giving each hash a pack index
 
 A modded TRPFD moves certain hashes from `FileHashes` into `UnusedHashes`,
-which tells the game "skip the pack for this file, look on disk instead."
-Merging is just unioning all the `UnusedHashes` sets together — for each
-unused hash any input declares, the merged TRPFD also marks it unused.
+which tells the game to skip the indexed pack and look for the file on
+disk. Merging is just unioning all the `UnusedHashes` sets together — for
+each unused hash any input declares, the merged TRPFD also marks it unused.
 
 ## Credits
 

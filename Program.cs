@@ -38,7 +38,7 @@ internal static class Program
             Console.Error.WriteLine();
             Console.Error.WriteLine("Reads <base> as the starting TRPFD and unions every <addN>'s UnusedHashes");
             Console.Error.WriteLine("into it. For each hash any input marked unused, the merged TRPFD also marks");
-            Console.Error.WriteLine("it unused so the game falls back to LayeredFS for every modded file.");
+            Console.Error.WriteLine("it unused so the game looks for a loose file on disk instead.");
             Console.Error.WriteLine();
             Console.Error.WriteLine("Run with no arguments to open the GUI.");
             return 1;

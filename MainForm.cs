@@ -386,7 +386,7 @@ internal sealed class MainForm : Form
         {
             using var dlg = new FolderBrowserDialog
             {
-                Description = "Pick your mods folder (typically yuzu\\load\\<title id>)",
+                Description = "Pick your mods folder (the parent folder that holds each mod subfolder)",
                 UseDescriptionForTitle = true,
                 ShowNewFolderButton = true,
             };
@@ -484,7 +484,7 @@ internal sealed class MainForm : Form
     }
 
     // After a successful merge, rename each source mod's data.trpfd to data.trpfd.bak so
-    // Yuzu's LayeredFS only sees the merged TRPFD in AAA_Master. Skip the output path itself
+    // the emulator only sees the merged TRPFD in AAA_Master. Skip the output path itself
     // (in case the user picked an output folder where AAA_Master is also in the mod list).
     private void BackupSourceTrpfds(string outPath)
     {
@@ -583,7 +583,7 @@ internal sealed class MainForm : Form
         }
         if (updates.Count > 0) PersistMods();
 
-        AppendLog($"[done ] restored={restored}, skipped={skipped}. Disable or delete the AAA_Master folder in Yuzu if you want to fully revert.");
+        AppendLog($"[done ] restored={restored}, skipped={skipped}. Disable or delete the AAA_Master folder in your mod manager if you want to fully revert.");
     }
 
     protected override void OnShown(EventArgs e)

@@ -3,9 +3,9 @@
 // data.trpfd is a virtual file index used by the game's romfs/arc subsystem.
 // Each entry in FileHashes is the FNV-1a-64 of a romfs-relative path that the
 // game's TRPFD service can serve directly from the indexed packs. Hashes that
-// appear in UnusedHashes are skipped by the indexed lookup so the platform's
-// LayeredFS layer can serve a loose file from disk instead — this is how
-// mods inject replacement assets without rebuilding the packs.
+// appear in UnusedHashes are skipped by the indexed lookup so the platform
+// looks for a loose file on disk instead — this is how mods inject
+// replacement assets without rebuilding the packs.
 //
 // Field order below is the on-disk field id order; do not reorder.
 

@@ -25,3 +25,6 @@ smoke-test-*.trpfd
 
 # Claude Code internal state
 .claude/
+
+# Personal helper script (contains user-specific paths)
+merge.bat
